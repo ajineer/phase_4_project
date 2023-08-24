@@ -53,7 +53,7 @@ class List(db.Model, SerializerMixin):
     
     tasks = db.relationship('Task', back_populates='list', cascade='all, delete, delete-orphan')
     user = db.relationship('User', back_populates='lists')
-    event = db.relationhip('Event', back_populates='lists')
+    event = db.relationship('Event', back_populates='lists')
 
     @validates('name')
     def validate_name(self, key, name):
@@ -74,6 +74,11 @@ class Calendar(db.Model, SerializerMixin):
     user = db.relationship('User', back_populates='calendar')
     events = db.relationship('Event', back_populates='calendar', cascade='all, delete, delete-orphan')
 
+    @validates('year')
+    def validate_year(self, key, year):
+        if not year or not isinstance(year, int):
+            raise ValueError
+        return year
 
 class Event(db.Model, SerializerMixin):
 
@@ -87,7 +92,7 @@ class Event(db.Model, SerializerMixin):
     start = db.Column(db.Time, nullable=False)
     end = db.Column(db.Time, nullable=False)
 
-    calendar_id = db.Column(db.Integer, db.ForeignKey('caldendars.id', ondelete='CASCADE'))
+    calendar_id = db.Column(db.Integer, db.ForeignKey('calendars.id', ondelete='CASCADE'))
     
     calendar = db.relationship('Calendar', back_populates='events', cascade='all, delete, delete-orphan')
     lists = db.relationship('List', back_populates='event')

@@ -58,11 +58,137 @@ class Logout(Resource):
             return {}, 204
         
         return {'error': 'Unauthorized'}, 401
+    
+class Lists(Resource):
+
+    def get(self):
+
+        if session.get('user_id'):
+            lists = List.query.filter(List.user_id == session['user_id'])
+            if lists:
+                return [l.to_dict() for l in lists], 200
+            return {'error': 'No lists found'}, 404
+        
+    def post(self):
+
+        if session.get('user_id'):
+            name = request.get_json().get('name')
+            user_id = session['user_id']
+            try:
+                new_list = List(name=name, user_id=user_id)
+                db.session.add(new_list)
+                db.session.commit()
+                return new_list.to_dict()
+            
+            except IntegrityError:
+                return {'error': 'Error in creating list'}, 422
+                
+        return {'error': 'Must be logged in to create a new list'}, 401
+    
+class ListById(Resource):
+    
+    def get(self, id):
+
+        if session.get('user_id'):
+            list = List.query.filter(List.user_id == session['user_id'] and List.id == id).first()
+            if list:
+                return list.to_dict(rules=('tasks',)), 200
+            return {'error', 'List not found'}, 404
+        return {'error', 'Must be logged in to retrieve lists'}, 401
+    
+    def patch(self, id):
+
+        if session.get('user_id'):
+            list = List.query.filter(List.user_id == session['user_id'] and List.id == id).first()
+            if list:
+                setattr(list, 'name', request.get_json()['name'])
+                db.session.add(list)
+                db.session.commit()
+                return list.to_dict(rules=('tasks',)), 202
+            return {'error': 'List not found'}, 404
+        return {'error': 'Unauthorized'}, 401
+    
+    def delete(self, id):
+
+        if session.get('user_id'):
+            list = List.query.filter(List.user_id == session['user_id'] and List.id == id).first()
+            if list:
+                db.session.delete(list)
+                db.session.commit()
+                return {'Message': "List deleted"}, 204 
+            return {'error': 'List not found'}, 404
+        
+    def post(self, id):
+
+        if session.get('user_id'):
+
+            try:
+                new_task = Task(
+                    description = request.get_json()['description'],
+                    list_id = id,
+                    status = 0,
+                    updated = datetime.utcnow()
+                )
+
+                db.session.add(new_task)
+                db.session.commit()
+
+                return List.query.filter(List.id == id and User.id == session['user_id']).first().to_dict(rules=('tasks',)), 201
+            
+            except IntegrityError:
+
+                return {'error': "Couldn't create task"}, 422
+        
+        return {'error': 'Must be logged in to create tasks'}, 401 
+
+
+class TaskById(Resource):
+
+    def get(self, id):
+
+        if session.get('user_id'):
+            task = Task.query.filter(Task.id == id and Task.list.user_id == session['user_id']).first()
+            if task:
+                return task.to_dict(), 200
+            return {'error': 'Task not found'}, 404
+        return {'error': 'Unauthoriezed'}, 401
+    
+
+    def patch(self, id):
+
+        if session.get('user_id'):
+            
+            task = Task.query.filter(Task.id == id and Task.list.user_id == session['user_id']).first()
+
+            if task:
+                status = request.get_json()['status'] if request.get_json()['status'] == 1 or request.get_json()['status'] == 0 else 0
+                setattr(task, 'description', request.get_json()['description'])
+                setattr(task, 'status', status)
+                setattr(task, 'updated' , datetime.utcnow())
+                db.session.add(task)
+                db.session.commit()
+                return task.to_dict(), 200
+            return {'error': 'Task not found'}, 404
+        return {'error': 'Must be logged in to modify tasks'}, 401
+    
+    def delete(self, id):
+
+        if session.get('user_id'):
+            task = Task.query.filter(Task.id == id and Task.list.user_id == session['user_id']).first()
+            if task:
+                db.session.delete(task)
+                db.session.commit()
+                return {'Message':'Task deleted'}, 204
+            return {'error': 'Task not found'}, 404
+        return {'error': 'Must be logged in'}, 401
 
 api.add_resource(Login, '/login', endpoint='login')
 api.add_resource(Logout, '/logout', endpoint='logout')
 api.add_resource(Signup, '/signup', endpoint='signup')
 api.add_resource(CheckSession, '/check_session', endpoint='check_session')
+api.add_resource(Lists, '/list', endpoint='list')
+api.add_resource(ListById, '/list/<int:id>')
+api.add_resource(TaskById, '/task/<int:id>')
 
 if __name__ == '__main__':
     app.run(port=5555, debug=False)
