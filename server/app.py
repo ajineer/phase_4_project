@@ -30,7 +30,7 @@ class Signup(Resource):
             new_calendar.user_id = new_user.id
             db.session.add(new_calendar)
             db.session.commit()
-            return new_calendar.to_dict(rules=('user',)), 201
+            return new_user.to_dict(rules=('calendar',)), 201
         
         return {'error': '422 Unprocessable Entity'}, 422
     
@@ -193,7 +193,7 @@ class TaskById(Resource):
                 setattr(task, 'updated' , datetime.utcnow())
                 db.session.add(task)
                 db.session.commit()
-                return task.to_dict(), 200
+                return task.to_dict(), 201
             return {'error': 'Task not found'}, 404
         return {'error': 'Must be logged in to modify tasks'}, 401
     
@@ -207,6 +207,60 @@ class TaskById(Resource):
                 return {'Message':'Task deleted'}, 204
             return {'error': 'Task not found'}, 404
         return {'error': 'Must be logged in'}, 401
+    
+class Events(Resource):
+
+    def get(self):
+
+        if session.get('user_id'):
+            events = Event.query.filter(Event.calendar.user_id == session['user_id']).all()
+            if events:
+                return [e.to_dict() for e in events], 200
+            return {'error': 'No events to show'}, 404
+        return {'error': 'Unauthorized'}, 401
+    
+    def post(self):
+
+        if session.get('user_id'):
+            user = User.query.filter(User.id == session.get('user_id'))
+            try:
+                new_event = Event(
+                    name = request.get_json()['name'],
+                    start = request.get_json().get('start', datetime.utcnow),
+                    end = request.get_json().get['end', datetime.utcnow]
+                    calendar_id = user.calendar.id
+                )
+                db.session.add(new_event)
+                db.session.commit()
+                return new_event.to_dict(), 201
+            except IntegrityError:
+                return {'error': 'could not create event'}, 422
+        return {'error': 'Unauthorized'}, 401
+    
+class EventByID(Resource):
+
+    def get(self, id):
+        if session.get('user_id'):
+            event = Event.query.filter(Event.id == id and Event.calendar.user_id == session['user_id']).first()
+            if event:
+                return event.to_dict(), 200
+            return {'error', 'event not found'}, 404
+        return {'error': 'Unauthorized'}
+    
+    def patch(self, id):
+        if session.get('user_id'):
+            event = Event.query.filter(Event.id == id and Event.calendar.user_id == session['user_id']).first()
+            if event:
+                for attr in request.get_json():
+                    setattr(event, attr, request.get(attr))
+                db.session.add(event)
+                db.commit()
+                return event.to_dict(), 201
+            return {'error', 'event not found'}, 404
+        return {'error': 'Unauthorized'}
+
+
+
 
 api.add_resource(Login, '/login', endpoint='login')
 api.add_resource(Logout, '/logout', endpoint='logout')
