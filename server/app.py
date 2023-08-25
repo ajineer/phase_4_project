@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 
-from models import User
+from models import User, Calendar, Event, List, Task
 from flask_migrate import Migrate
 from flask import Flask, request, session
 from flask_restful import Resource
+from sqlalchemy.exc import IntegrityError
 from config import app, db, api
+from datetime import datetime
 
+
+@app.route('/')
+def home():
+    return '<h1>Home Page</h1>'
 
 class Signup(Resource):
 
     def post(self):
         username = request.get_json().get('username')
         password = request.get_json().get('password')
+        date_time = datetime.now()
+        new_calendar = Calendar(year = date_time.year)
 
         if username and password and not User.query.filter(User.username == username).first():
             new_user = User(username = username)
@@ -19,7 +27,10 @@ class Signup(Resource):
             db.session.add(new_user)
             db.session.commit()
             session['user_id'] = new_user.id
-            return new_user.to_dict(), 201
+            new_calendar.user_id = new_user.id
+            db.session.add(new_calendar)
+            db.session.commit()
+            return new_calendar.to_dict(rules=('user',)), 201
         
         return {'error': '422 Unprocessable Entity'}, 422
     
@@ -58,6 +69,21 @@ class Logout(Resource):
             return {}, 204
         
         return {'error': 'Unauthorized'}, 401
+    
+class GetCalendar(Resource):
+
+    def get(self):
+
+        if session.get('user_id'):
+
+            calendar = Calendar.query.filter(Calendar.user_id == session['user_id']).first()
+
+            if calendar:
+                return calendar.to_dict(), 200
+            return {'error': 'No calendart found'}, 404
+
+        return {'error': 'Unauthorized'}, 401
+
     
 class Lists(Resource):
 
@@ -189,6 +215,7 @@ api.add_resource(CheckSession, '/check_session', endpoint='check_session')
 api.add_resource(Lists, '/list', endpoint='list')
 api.add_resource(ListById, '/list/<int:id>')
 api.add_resource(TaskById, '/task/<int:id>')
+api.add_resource(GetCalendar, '/calendar')
 
 if __name__ == '__main__':
     app.run(port=5555, debug=False)
